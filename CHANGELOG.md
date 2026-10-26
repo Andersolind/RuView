@@ -732,8 +732,9 @@ Model release (no new firmware binary). Firmware remains at v0.6.0-esp32.
 - Restrict MR60BHA2 probe identification to its heart-rate, distance, and
   presence frame types. Ambiguous LD6002B/LD6004 work-mode, low-power, and
   target headers no longer establish an MR60BHA2 identity (#2136).
-- Update test-only P-256 signing, constant-time arithmetic, and Tokio to
-  patched releases. Checksum-verified ZIP and Wasmtime cache compatibility
+- Generate test ES256 keys with the existing Ring backend, removing the
+  obsolete test-only curve dependency. Update constant-time arithmetic and
+  Tokio to patched releases. Checksum-verified ZIP and Wasmtime cache compatibility
   patches retain upstream source code and use Zstandard 0.14.3. The existing
   audit policy is unchanged; the new upstream archive/cache test gates
   exercise the patched dependencies.
