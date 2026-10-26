@@ -732,9 +732,6 @@ Model release (no new firmware binary). Firmware remains at v0.6.0-esp32.
 - Restrict MR60BHA2 probe identification to its heart-rate, distance, and
   presence frame types. Ambiguous LD6002B/LD6004 work-mode, low-power, and
   target headers no longer establish an MR60BHA2 identity (#2136).
-- Startup baseline promotion permits up to two vital-sign samples in its
-  twelve-sample holdout, consistent with the ten-empty-sample requirement.
-  Refinement continues to require zero vital-sign samples (#2169).
 - Update test-only P-256 signing, constant-time arithmetic, and Tokio to
   patched releases. Checksum-verified ZIP and Wasmtime cache compatibility
   patches retain upstream source code and use Zstandard 0.14.3. The existing
