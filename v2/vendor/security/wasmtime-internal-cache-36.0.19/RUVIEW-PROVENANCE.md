@@ -1,7 +1,7 @@
 # Dependency compatibility patch
 
 Source: crates.io `wasmtime-internal-cache` 36.0.19.
-Published archive SHA-256: `4108e1964b3a02b4b5604ea1a2918a0cbcab512e5de0ccf4c062fc6c06b2eb8e` (verified against the workspace lockfile).
+Published archive SHA-256: `4108e1964b3a02b4b5604ea1a2918a0cbcab512e5de0ccf4c062fc6c06b2eb8e` (verified against the pre-patch workspace lockfile at `fefb0f918`).
 
 Upstream executable source code and tests are unchanged. Trailing whitespace
 in upstream documentation/comments is normalized for clean repository diffs.
