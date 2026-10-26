@@ -727,6 +727,24 @@ Model release (no new firmware binary). Firmware remains at v0.6.0-esp32.
 ### Verified
 - Real hardware: ESP32-S3 (COM7) WiFi CSI + ESP32-C6/MR60BHA2 (COM4) 60 GHz mmWave running concurrently. HR=75 bpm, BR=25/min at 52 cm range. All 11 QEMU CI jobs green.
 
+## [0.8.16-esp32] - 2026-10-26
+
+- Keep the container entrypoint on LF in Windows checkouts so the built Linux
+  image can start successfully.
+- Restrict MR60BHA2 probe identification to its heart-rate, distance, and
+  presence frame types. Ambiguous LD6002B/LD6004 work-mode, low-power, and
+  target headers no longer establish an MR60BHA2 identity (#2136).
+- Generate test ES256 keys with the existing Ring backend, removing the
+  obsolete test-only curve dependency. Update constant-time arithmetic and
+  Tokio to patched releases. Checksum-verified ZIP and Wasmtime cache compatibility
+  patches retain upstream source code and use Zstandard 0.14.3. The existing
+  audit policy is unchanged; the new upstream archive/cache test gates
+  exercise the patched dependencies.
+- Host tests and firmware builds validate the probe change. A live MR60BHA2
+  kit was read through its existing ESPHome API; that checks the network
+  integration, not the new firmware image or sensing accuracy. Firmware
+  bundles remain prerelease builds without new physical-board qualification.
+
 ## [0.8.15-esp32] - 2026-10-21
 
 ### ESP32 CSI input and onboarding corrections

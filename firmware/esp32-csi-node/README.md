@@ -19,6 +19,14 @@ This firmware captures WiFi Channel State Information (CSI) from an ESP32-S3 (pr
 > | **Fall detection** | Phase acceleration threshold | Configurable sensitivity |
 > | **Programmable sensing** | WASM modules loaded over HTTP | Hot-swap, no reflash |
 
+## Firmware 0.8.16 prerelease: conservative mmWave identification
+
+Version 0.8.16 restricts MR60BHA2 identification to its heart-rate, distance,
+and presence frame types. Ambiguous LD6002B/LD6004 headers no longer identify
+those devices as MR60BHA2. Host regressions and CI builds cover this change;
+a live MR60BHA2 kit was read using its existing ESPHome firmware, which does
+not qualify the new firmware image or sensing accuracy.
+
 ## Firmware 0.8.15 prerelease: CSI reliability and recoverable configuration
 
 Version 0.8.15 preserves bounded CSI input for ESP32-S3 STBC frames, caps
@@ -136,7 +144,7 @@ For users who want to get running fast. Detailed explanations follow in later se
 ### 0. Download a versioned firmware bundle
 
 Use the versioned source tag and binaries on the
-[v0.8.14 ESP32 prerelease page](https://github.com/ruvnet/RuView/releases/tag/v0.8.14-esp32).
+[v0.8.16 ESP32 prerelease page](https://github.com/ruvnet/RuView/releases/tag/v0.8.16-esp32).
 For the previous stable firmware and its hardware evidence, see
 [v0.8.8](https://github.com/ruvnet/RuView/releases/tag/v0.8.8-esp32).
 Choose the package that names both your chip and flash size:
