@@ -17,6 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use p256::ecdsa::SigningKey;
+use p256::elliptic_curve::Generate;
 use p256::pkcs8::{EncodePrivateKey, LineEnding};
 use ruview_auth::{
     jwks::{JwksError, JwksFetcher},
@@ -36,12 +37,12 @@ struct TestKey {
 }
 
 fn generate_key() -> TestKey {
-    let signing = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let signing = SigningKey::generate();
     let pem = signing
         .to_pkcs8_pem(LineEnding::LF)
         .expect("PKCS#8 encode")
         .to_string();
-    let point = signing.verifying_key().to_encoded_point(false);
+    let point = signing.verifying_key().to_sec1_point(false);
     TestKey {
         pkcs8_pem: pem,
         x: URL_SAFE_NO_PAD.encode(point.x().expect("P-256 x")),

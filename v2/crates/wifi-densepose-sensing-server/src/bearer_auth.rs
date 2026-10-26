@@ -1147,6 +1147,7 @@ mod oauth_tests {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
     use jsonwebtoken::{encode, EncodingKey, Header};
     use p256::ecdsa::SigningKey;
+    use p256::elliptic_curve::Generate;
     use p256::pkcs8::{EncodePrivateKey, LineEnding};
     use ruview_auth::jwks::{JwksError, JwksFetcher};
     use std::sync::OnceLock;
@@ -1164,8 +1165,8 @@ mod oauth_tests {
     fn key() -> &'static TestKey {
         static K: OnceLock<TestKey> = OnceLock::new();
         K.get_or_init(|| {
-            let sk = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
-            let point = sk.verifying_key().to_encoded_point(false);
+            let sk = SigningKey::generate();
+            let point = sk.verifying_key().to_sec1_point(false);
             TestKey {
                 pem: sk.to_pkcs8_pem(LineEnding::LF).unwrap().to_string(),
                 x: URL_SAFE_NO_PAD.encode(point.x().unwrap()),
