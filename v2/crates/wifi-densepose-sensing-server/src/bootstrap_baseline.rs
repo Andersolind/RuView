@@ -20,8 +20,6 @@ pub const BOOTSTRAP_BASELINE_SCHEMA: &str = "ruview.bootstrap-empty-field-model.
 pub const BOOTSTRAP_BASELINE_AUTHORITY: &str = "bootstrap_only";
 pub const BOOTSTRAP_VALIDATION_SAMPLES: usize = 12;
 pub const BOOTSTRAP_VALIDATION_MIN_EMPTY: usize = 10;
-pub const BOOTSTRAP_VALIDATION_MAX_VITALS: usize =
-    BOOTSTRAP_VALIDATION_SAMPLES - BOOTSTRAP_VALIDATION_MIN_EMPTY;
 pub const BOOTSTRAP_VALIDATION_MIN_SPACING_MS: u64 = 1_000;
 pub const BOOTSTRAP_VALIDATION_SAMPLE_TIMEOUT_MS: u64 = 4_000;
 const BOOTSTRAP_MAX_FILE_BYTES: u64 = 1_048_576;
@@ -168,11 +166,7 @@ pub fn validation_diagnostics(
         sample_count: BOOTSTRAP_VALIDATION_SAMPLES,
         min_empty_sample_count: empty_sample_count.map(|_| BOOTSTRAP_VALIDATION_MIN_EMPTY),
         max_stale_sample_count: 0,
-        max_vital_sign_sample_count: if empty_sample_count.is_some() {
-            BOOTSTRAP_VALIDATION_MAX_VITALS
-        } else {
-            0
-        },
+        max_vital_sign_sample_count: 0,
     };
     let mut failures = Vec::new();
     let checks = [
@@ -202,7 +196,7 @@ pub fn validation_diagnostics(
             vital_sign_sample_count,
             requirements.max_vital_sign_sample_count,
             "at_most",
-            vital_sign_sample_count > requirements.max_vital_sign_sample_count,
+            vital_sign_sample_count != 0,
         ),
     ];
     for (check, observed, required, comparison, failed) in checks {
@@ -275,7 +269,7 @@ pub fn evaluate_validation(samples: &[BootstrapValidationSample]) -> BootstrapVa
         passed: samples.len() == BOOTSTRAP_VALIDATION_SAMPLES
             && empty_sample_count >= BOOTSTRAP_VALIDATION_MIN_EMPTY
             && stale_sample_count == 0
-            && vital_sign_sample_count <= BOOTSTRAP_VALIDATION_MAX_VITALS,
+            && vital_sign_sample_count == 0,
     }
 }
 
@@ -614,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn promotion_gate_requires_twelve_fresh_samples_and_allows_two_vitals() {
+    fn promotion_gate_requires_twelve_fresh_samples_and_zero_vitals() {
         assert_eq!(BOOTSTRAP_VALIDATION_MIN_SPACING_MS, 1_000);
         assert_eq!(BOOTSTRAP_VALIDATION_SAMPLE_TIMEOUT_MS, 4_000);
         assert!(BOOTSTRAP_VALIDATION_SAMPLE_TIMEOUT_MS >= BOOTSTRAP_VALIDATION_MIN_SPACING_MS);
@@ -631,19 +625,9 @@ mod tests {
         let mut stale = passing.clone();
         stale[0].fresh_tick = false;
         assert!(!evaluate_validation(&stale).passed);
-        let mut with_two_vitals = passing.clone();
-        for sample in with_two_vitals.iter_mut().take(BOOTSTRAP_VALIDATION_MAX_VITALS) {
-            sample.vital_signs_absent = false;
-        }
-        assert!(evaluate_validation(&with_two_vitals).passed);
-        let mut with_three_vitals = passing;
-        for sample in with_three_vitals
-            .iter_mut()
-            .take(BOOTSTRAP_VALIDATION_MAX_VITALS + 1)
-        {
-            sample.vital_signs_absent = false;
-        }
-        assert!(!evaluate_validation(&with_three_vitals).passed);
+        let mut vital = passing;
+        vital[0].vital_signs_absent = false;
+        assert!(!evaluate_validation(&vital).passed);
     }
 
     fn empty_validation_samples(count: usize) -> Vec<BootstrapValidationSample> {
@@ -683,18 +667,8 @@ mod tests {
     }
 
     #[test]
-    fn validation_diagnostics_allow_two_vitals_and_explain_excess() {
-        for count in [1, 2] {
-            let mut samples = empty_validation_samples(12);
-            for sample in samples.iter_mut().take(count) {
-                sample.vital_signs_absent = false;
-            }
-            let result = evaluate_validation(&samples);
-            assert!(result.passed);
-            assert!(result.diagnostics().failures.is_empty());
-        }
-
-        for count in [3, 5] {
+    fn validation_diagnostics_explain_numeric_vital_veto_even_when_all_empty() {
+        for count in [1, 5] {
             let mut samples = empty_validation_samples(12);
             for sample in samples.iter_mut().take(count) {
                 sample.vital_signs_absent = false;
@@ -710,7 +684,7 @@ mod tests {
                     "sample_count": 12,
                     "min_empty_sample_count": 10,
                     "max_stale_sample_count": 0,
-                    "max_vital_sign_sample_count": 2,
+                    "max_vital_sign_sample_count": 0,
                 })
             );
             assert_eq!(
@@ -718,12 +692,12 @@ mod tests {
                 serde_json::json!([{
                     "check": "vital_sign_sample_count",
                     "observed": count,
-                    "required": 2,
+                    "required": 0,
                     "comparison": "at_most",
                 }])
             );
             assert!(diagnostics.failure_summary().contains(&format!(
-                "numeric vital-sign estimates in {count}/12 samples (2 allowed)"
+                "numeric vital-sign estimates in {count}/12 samples (0 allowed)"
             )));
         }
     }
@@ -763,9 +737,7 @@ mod tests {
         let mut samples = empty_validation_samples(11);
         samples[0].fresh_tick = false;
         samples[1].calibrated_empty = false;
-        for sample in samples.iter_mut().take(BOOTSTRAP_VALIDATION_MAX_VITALS + 1) {
-            sample.vital_signs_absent = false;
-        }
+        samples[2].vital_signs_absent = false;
         let result = evaluate_validation(&samples);
         assert!(!result.passed);
         let diagnostics = result.diagnostics();
@@ -787,7 +759,7 @@ mod tests {
             "11 samples collected (exactly 12 required)",
             "9 samples reported empty (at least 10 required)",
             "1 stale samples (0 allowed)",
-            "numeric vital-sign estimates in 3/12 samples (2 allowed)",
+            "numeric vital-sign estimates in 1/12 samples (0 allowed)",
         ] {
             assert!(summary.contains(expected), "missing {expected}: {summary}");
         }
