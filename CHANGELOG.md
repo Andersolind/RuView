@@ -729,6 +729,8 @@ Model release (no new firmware binary). Firmware remains at v0.6.0-esp32.
 
 ## [0.8.16-esp32] - 2026-10-26
 
+- Keep the container entrypoint on LF in Windows checkouts so the built Linux
+  image can start successfully.
 - Restrict MR60BHA2 probe identification to its heart-rate, distance, and
   presence frame types. Ambiguous LD6002B/LD6004 work-mode, low-power, and
   target headers no longer establish an MR60BHA2 identity (#2136).
