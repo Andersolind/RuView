@@ -66,6 +66,16 @@ export const API_CONFIG = {
     DEV: {
       CONFIG: '/api/v1/dev/config',
       RESET: '/api/v1/dev/reset'
+    },
+
+    // NetSweep & Ollama AI Extension
+    NETSWEEP: {
+      SCAN: '/api/v1/netsweep/scan'
+    },
+    OLLAMA: {
+      MODELS: '/api/v1/ollama/models',
+      ANALYZE: '/api/v1/ollama/analyze',
+      CHAT: '/api/v1/ollama/chat'
     }
   },
   

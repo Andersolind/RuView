@@ -5,6 +5,7 @@ import { DashboardTab } from './components/DashboardTab.js';
 import { HardwareTab } from './components/HardwareTab.js';
 import { LiveDemoTab } from './components/LiveDemoTab.js';
 import { SensingTab } from './components/SensingTab.js';
+import { NetSweepTab } from './components/NetSweepTab.js';
 import { apiService } from './services/api.service.js';
 import { wsService } from './services/websocket.service.js';
 import { healthService } from './services/health.service.js';
@@ -159,6 +160,15 @@ class WiFiDensePoseApp {
     const sensingContainer = document.getElementById('sensing');
     if (sensingContainer) {
       this.components.sensing = new SensingTab(sensingContainer);
+    }
+
+    // NetSweep & Ollama AI tab
+    const netsweepContainer = document.getElementById('netsweep');
+    if (netsweepContainer) {
+      this.components.netsweep = new NetSweepTab(netsweepContainer);
+      this.components.netsweep.init().catch(error => {
+        console.error('Failed to initialize NetSweep tab:', error);
+      });
     }
 
     // Training tab - lazy load to avoid breaking other tabs if import fails

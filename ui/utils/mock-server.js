@@ -143,6 +143,41 @@ export class MockServer {
       message: 'Streaming stopped',
       status: 'inactive'
     }));
+
+    // NetSweep & Ollama endpoints
+    this.addEndpoint('GET', '/api/v1/netsweep/scan', () => ({
+      timestamp: new Date().toISOString(),
+      provenance: 'SYNTHETIC',
+      _simulated: true,
+      source: 'mock',
+      rf_sweep: {
+        bssid_count: 4,
+        bssids: [
+          { bssid: 'a4:2b:b0:11:22:01', ssid: 'RuView-Mesh-5G', channel: 36, band: '5 GHz', radio: '802.11ax', rssi_dbm: -48, variance: 0.42, status: 'trusted' },
+          { bssid: 'a4:2b:b0:11:22:02', ssid: 'RuView-Sense-2G', channel: 1, band: '2.4 GHz', radio: '802.11ax', rssi_dbm: -54, variance: 1.85, status: 'body-correlated' },
+          { bssid: '7c:10:c9:88:41:10', ssid: 'Lab-IoT-North', channel: 6, band: '2.4 GHz', radio: '802.11n', rssi_dbm: -67, variance: 0.19, status: 'normal' },
+          { bssid: 'de:ad:be:ef:09:99', ssid: '(hidden)', channel: 6, band: '2.4 GHz', radio: '802.11ac', rssi_dbm: -51, variance: 3.40, status: 'anomaly-hidden-high-power' }
+        ],
+        recommended_channels: { band_2_4ghz: 11, band_5ghz: 149 },
+        congestion_score: 0.38
+      },
+      csi_mesh: {
+        active_nodes: 2,
+        nodes: [
+          { node_id: 1, rssi_dbm: -52.0, motion_level: 'presence', coherence: 0.96, online: true },
+          { node_id: 2, rssi_dbm: -58.5, motion_level: 'stationary', coherence: 0.91, online: true }
+        ],
+        discovery_service: '_ruview._tcp.local.',
+        motion_level: 'presence',
+        person_count: 1
+      },
+      privacy_audit: {
+        rogue_ap_alerts: 1,
+        beamforming_exposure: 'moderate',
+        reid_risk_pct: 18.5,
+        recommendation: 'Move 2.4 GHz sensing to Ch 11 and inspect hidden BSSID de:ad:be:ef:09:99 on Ch 6.'
+      }
+    }));
   }
 
   // Generate mock person data

@@ -34,6 +34,7 @@ mod rvf_container;
 // here compiles it against the real `AppStateInner` and wires its `routes()`
 // (including `/ws/train/progress`) into the live router below.
 mod training_api;
+mod netsweep_ollama;
 mod rvf_pipeline;
 mod tracker_bridge;
 pub mod types;
@@ -15218,6 +15219,7 @@ async fn main() {
         // share `AppStateInner` and `/api/v1/train/*` sits under the bearer gate
         // applied below (like the rest of `/api/v1/*`).
         .merge(training_api::routes())
+        .merge(netsweep_ollama::routes())
         // Adaptive classifier endpoints
         .route("/api/v1/adaptive/train", post(adaptive_train))
         .route("/api/v1/adaptive/status", get(adaptive_status))
