@@ -119,6 +119,8 @@
     const { WebSocketClient } = await import('./services/websocket-client.js');
     const { DataProcessor } = await import('./services/data-processor.js');
     const { buildSensingWsUrl } = await import('./services/sensing.service.js');
+    const { netSweepOllamaService } = await import('./services/netsweep-ollama.service.js');
+    const { EarwormSceneLayer, EarwormAudioSonifier, EarwormHudDock } = await import('./components/earworm-engine.js');
 
     // -- Application State --
     const state = {
@@ -127,6 +129,9 @@
       bodyModelManager: null,
       signalViz: null,
       hud: null,
+      earwormLayer: null,
+      earwormSonifier: null,
+      earwormDock: null,
       wsClient: null,
       dataProcessor: null,
       stats: null,
@@ -182,8 +187,18 @@
         state.signalViz = new SignalVisualization(state.scene.getScene());
         setLoadingProgress(65, 'Creating HUD...');
 
-        // 5. Dashboard HUD
+        // 5. Dashboard HUD + Earworm 3D Room Layer (TDoA, 802.11bf Beamforming, Multipath, Time-Reversal, PlutoSDR)
         state.hud = new DashboardHUD(container);
+        state.earwormLayer = new EarwormSceneLayer(state.scene.getScene());
+        state.earwormSonifier = new EarwormAudioSonifier();
+        state.earwormDock = new EarwormHudDock(container, {
+          service: netSweepOllamaService,
+          sceneLayer: state.earwormLayer,
+          sonifier: state.earwormSonifier,
+          onModeChange: (mode) => {
+            state.isDemoMode = mode !== 'real';
+          },
+        });
         setLoadingProgress(75, 'Initializing data processor...');
 
         // 6. Data processor
@@ -267,6 +282,14 @@
       // Update signal visualization animations
       state.signalViz.update(delta, elapsed);
 
+      // Update Earworm 3D Room Layer + Time-Reversal Mirror + HRTF Sonifier
+      const p0 = vizData?.persons?.[0]?.position;
+      const targetOverride = p0 ? [p0.x ?? 0, p0.y ?? 1.25, p0.z ?? 0] : null;
+      const earworm = netSweepOllamaService.computeSyntheticEarworm(targetOverride);
+      if (state.earwormLayer) state.earwormLayer.update(earworm, elapsed);
+      if (state.earwormSonifier) state.earwormSonifier.update(earworm);
+      if (state.earwormDock) state.earwormDock.update(earworm);
+
       // Update HUD
       if (state.hud) {
         state.hud.tickFPS();
@@ -341,12 +364,15 @@
       if (state.bodyModelManager) state.bodyModelManager.dispose();
       if (state.signalViz) state.signalViz.dispose();
       if (state.environment) state.environment.dispose();
+      if (state.earwormLayer) state.earwormLayer.dispose();
+      if (state.earwormSonifier) state.earwormSonifier.dispose();
       if (state.hud) state.hud.dispose();
       if (state.scene) state.scene.dispose();
     });
 
     // -- Keyboard shortcuts --
     document.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
       switch (e.key.toLowerCase()) {
         case 'r':
           // Reset camera
@@ -356,6 +382,18 @@
           // Toggle demo mode
           state.isDemoMode = !state.isDemoMode;
           console.log(`[VIZ] Demo mode: ${state.isDemoMode ? 'ON' : 'OFF'}`);
+          break;
+        case 'e':
+          if (state.earwormSonifier) state.earwormSonifier.toggleAudio();
+          break;
+        case 'm':
+          if (state.earwormLayer) state.earwormLayer.setVisibility({ multipath: !state.earwormLayer.showMultipath });
+          break;
+        case 'b':
+          if (state.earwormLayer) state.earwormLayer.setVisibility({ beamforming: !state.earwormLayer.showBeamforming });
+          break;
+        case 't':
+          if (state.earwormLayer) state.earwormLayer.setVisibility({ tdoa: !state.earwormLayer.showTdoa });
           break;
         case 'c':
           // Force reconnect
