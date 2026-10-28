@@ -32,6 +32,14 @@ test('EnhancedTimeReversalSimulator (computeTimeReversal) + Earworm TDoA/Beamfor
   assert.equal(ew.beamforming.polar_spectrum.length, 13);
   assert.equal(ew.spatial_multipath.paths.length, 5);
   assert.ok(ew.time_reversal);
+  assert.ok(ew.glowworm_burst);
+  assert.equal(ew.glowworm_burst.rx_lo_hz, 868300000);
+  assert.equal(ew.glowworm_burst.sample_rate_hz, 2000000);
+  assert.equal(ew.glowworm_burst.rx_buffer_size, 10000);
+  assert.equal(ew.glowworm_burst.rx_hardwaregain_chan0, 20);
+  assert.equal(ew.glowworm_burst.threshold_db, -30);
+  assert.equal(ew.glowworm_burst.signal_detected, true);
+  assert.equal(ew.glowworm_burst.power_profile_db.length, 160);
 
   const modeRes = await svc.setExecutionMode('real', { uri: 'ip:192.168.2.1', center_freq_mhz: 2437 });
   assert.equal(modeRes.executionMode, 'real');

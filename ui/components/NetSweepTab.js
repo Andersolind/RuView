@@ -4,6 +4,7 @@ import { netSweepOllamaService } from '../services/netsweep-ollama.service.js';
 import {
   drawPolarBeamformingCanvas,
   drawTimeReversalAuditCanvas,
+  drawGlowWormBurstCanvas,
   EarwormAudioSonifier,
 } from './earworm-engine.js';
 
@@ -100,6 +101,18 @@ export class NetSweepTab {
           </div>
           <canvas id="ns-tr-canvas" width="760" height="210" style="width:100%;border:1px solid #1e334d;border-radius:6px;"></canvas>
         </div>
+
+        <div class="ns-card" style="grid-column: 1 / -1;">
+          <h3>8. Step 4: URH + ADALM-Pluto SDR 868.3 MHz Glow-worm Short-Burst Detector &amp; Demodulator</h3>
+          <div id="ns-gw-status" class="ns-section-sub"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin:6px 0;font-size:12px;">
+            <label for="ns-gw-thresh">Trigger Threshold (dB):</label>
+            <input id="ns-gw-thresh" type="range" min="-45" max="-10" step="1" value="-30" />
+            <span id="ns-gw-thresh-lbl">-30 dB</span>
+            <span>| RX Hardware Gain: <code>20 dB (manual)</code> | Sample Rate: <code>2.0 MSPS</code> | Buffer: <code>10,000</code></span>
+          </div>
+          <canvas id="ns-gw-canvas" width="760" height="130" style="width:100%;border:1px solid #1e334d;border-radius:6px;"></canvas>
+        </div>
       </div>
     `;
   }
@@ -129,6 +142,13 @@ export class NetSweepTab {
       if (lbl) lbl.textContent = `${val.toFixed(2)} σ`;
       await this.service.runTimeReversal(this.service.blockedPaths, val);
       this.renderEarwormAndTimeReversal(this.service.lastSweep?.earworm || this.service.computeSyntheticEarworm());
+    });
+    this.container.querySelector('#ns-gw-thresh')?.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      const lbl = this.container.querySelector('#ns-gw-thresh-lbl');
+      if (lbl) lbl.textContent = `${val} dB`;
+      this.service.computeGlowWormBurst(val, this.service.glowWormGainDb);
+      this.renderEarwormAndTimeReversal(this.service.computeSyntheticEarworm());
     });
     this.container.querySelectorAll('[data-mode]').forEach((btn) => {
       btn.addEventListener('click', () => this.runAnalysis(btn.getAttribute('data-mode')));
@@ -270,6 +290,13 @@ export class NetSweepTab {
     }
 
     drawTimeReversalAuditCanvas(this.container.querySelector('#ns-tr-canvas'), tr);
+
+    const gw = ew.glowworm_burst || this.service.computeGlowWormBurst();
+    const gwStatus = this.container.querySelector('#ns-gw-status');
+    if (gwStatus && gw) {
+      gwStatus.innerHTML = `<strong>Status:</strong> <code>${gw.status_message}</code> · <strong>Max Power:</strong> ${gw.max_power_db} dB (Threshold ${gw.threshold_db} dB) · <strong>3D Emitter:</strong> <code>[${(gw.emitter_3d_xyz || []).join(', ')}] m</code>`;
+    }
+    drawGlowWormBurstCanvas(this.container.querySelector('#ns-gw-canvas'), gw);
   }
 
   async runAnalysis(mode) {

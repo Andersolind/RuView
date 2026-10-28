@@ -118,6 +118,60 @@ export function drawTimeReversalAuditCanvas(canvas, tr) {
   });
 }
 
+export function drawGlowWormBurstCanvas(canvas, burst) {
+  if (!canvas || !burst || typeof canvas.getContext !== 'function') return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width || 336;
+  const h = canvas.height || 105;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#05060e';
+  ctx.fillRect(0, 0, w, h);
+
+  const minDb = -52;
+  const maxDb = -5;
+  const mapY = (db) => {
+    const clamped = Math.max(minDb, Math.min(maxDb, db));
+    return h - 14 - ((clamped - minDb) / (maxDb - minDb)) * (h - 28);
+  };
+
+  // Draw threshold line (default -30 dB)
+  const threshY = mapY(burst.threshold_db ?? -30);
+  ctx.strokeStyle = '#ff4d4f';
+  ctx.setLineDash([4, 3]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(6, threshY);
+  ctx.lineTo(w - 6, threshY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const arr = Array.isArray(burst.power_profile_db) ? burst.power_profile_db : [];
+  if (arr.length > 1) {
+    ctx.beginPath();
+    for (let i = 0; i < arr.length; i++) {
+      const x = (i / (arr.length - 1)) * (w - 12) + 6;
+      const y = mapY(arr[i]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = burst.signal_detected ? '#ffaa00' : '#00ccff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = burst.signal_detected ? '#52c41a' : '#8ab4d8';
+  ctx.font = '10px monospace';
+  ctx.fillText(
+    `868.3MHz 2MSPS 10k | Max:${burst.max_power_db}dB > ${burst.threshold_db}dB [${burst.signal_detected ? 'SIGNAL DETECTED!' : 'LISTENING'}]`,
+    6,
+    11
+  );
+  ctx.fillStyle = '#99bbdd';
+  ctx.fillText(`URH Demod (${burst.urh_modulation || '2-FSK/OOK'}): ${burst.demod_bits || ''}`, 6, h - 4);
+}
+
 export class EarwormAudioSonifier {
   constructor() {
     this.ctx = null;
@@ -308,7 +362,121 @@ export class EarwormSceneLayer {
       this.pulseBeads.push(bead);
     }
 
+    // 4. Step 4: 868.3 MHz Glow-worm Short-Burst Emitter Beacon & Expanding Wavefront in 3D Room
+    this.glowWormBeacon = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.16, 1),
+      new THREE.MeshBasicMaterial({ color: 0xffaa00, wireframe: true })
+    );
+    this.glowWormBeacon.position.set(-3.55, 1.35, -1.75);
+    this.root.add(this.glowWormBeacon);
+
+    const gwRingGeo = new THREE.RingGeometry(0.22, 0.3, 28);
+    gwRingGeo.rotateX(-Math.PI / 2);
+    this.glowWormWave = new THREE.Mesh(
+      gwRingGeo,
+      new THREE.MeshBasicMaterial({ color: 0xffaa00, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+    );
+    this.glowWormWave.position.set(-3.55, 1.35, -1.75);
+    this.root.add(this.glowWormWave);
+
+    // 5. Floating 3D Earworm Thought Bubble & Head Acoustic Halo Rings beside the Target
+    this.thoughtGroup = new THREE.Group();
+    this.root.add(this.thoughtGroup);
+
+    // Shimmering Earworm acoustic rings around the target's head/ears
+    this.earwormHeadRings = [];
+    for (let k = 0; k < 2; k++) {
+      const hGeo = new THREE.RingGeometry(0.18 + k * 0.09, 0.21 + k * 0.09, 24);
+      hGeo.rotateX(-Math.PI / 2);
+      const hMesh = new THREE.Mesh(
+        hGeo,
+        new THREE.MeshBasicMaterial({
+          color: k === 0 ? 0x00ffcc : 0xff66cc,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.7,
+        })
+      );
+      this.thoughtGroup.add(hMesh);
+      this.earwormHeadRings.push(hMesh);
+    }
+
+    // 3 small rising thought-bubble connector spheres from target's head to the thought cloud
+    this.thoughtTrailDots = [];
+    [0.035, 0.05, 0.068].forEach((r) => {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(r, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.88 })
+      );
+      this.thoughtGroup.add(dot);
+      this.thoughtTrailDots.push(dot);
+    });
+
+    if (typeof document !== 'undefined') {
+      this.bubbleCanvas = document.createElement('canvas');
+      this.bubbleCanvas.width = 320;
+      this.bubbleCanvas.height = 140;
+      this.bubbleTexture = new THREE.CanvasTexture(this.bubbleCanvas);
+      const spriteMat = new THREE.SpriteMaterial({
+        map: this.bubbleTexture,
+        transparent: true,
+        depthTest: false,
+      });
+      this.thoughtBubbleSprite = new THREE.Sprite(spriteMat);
+      this.thoughtBubbleSprite.scale.set(1.45, 0.64, 1);
+      this.thoughtGroup.add(this.thoughtBubbleSprite);
+      this._lastBubbleUpdate = 0;
+    }
+
     this.scene.add(this.root);
+  }
+
+  _updateThoughtBubbleCanvas(earworm, elapsed) {
+    if (!this.bubbleCanvas || !this.bubbleTexture) return;
+    const ctx = this.bubbleCanvas.getContext('2d');
+    if (!ctx) return;
+    const w = this.bubbleCanvas.width;
+    const h = this.bubbleCanvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Rounded thought-bubble card with glowing cyan border
+    ctx.fillStyle = 'rgba(6, 16, 30, 0.90)';
+    ctx.strokeStyle = '#00ffcc';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(6, 6, w - 12, h - 12, 18);
+    } else {
+      ctx.rect(6, 6, w - 12, h - 12);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    const words = ['SYSTEM', 'CONFIRMATION', 'LEFT', 'EAR', 'TV', 'LOOP', 'ACTIVE'];
+    const word = words[Math.floor(elapsed * 1.2) % words.length];
+    const son = earworm.sonification || {};
+    const bf = earworm.beamforming || {};
+    const tr = earworm.time_reversal || {};
+
+    ctx.fillStyle = '#00ffcc';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(`💭 EARWORM: "${word}"`, 18, 30);
+
+    ctx.fillStyle = '#ffaa00';
+    ctx.font = '12px monospace';
+    ctx.fillText(`♪ f0: ${son.carrier_freq_hz ?? 240} Hz | Beat: ${son.binaural_beat_hz ?? 6.2} Hz`, 18, 54);
+
+    ctx.fillStyle = '#bde0ff';
+    ctx.fillText(`🎯 802.11bf AoA: ${bf.aoa_deg ?? 0}° | AoD: ${bf.aod_deg ?? 0}°`, 18, 78);
+
+    ctx.fillStyle = '#77ffaa';
+    ctx.fillText(`⚡ TR Focus: ${tr.peak_to_rms_ratio ?? 4.2}x | Null:[${(tr.blocked_paths || [2, 4]).join(',')}]`, 18, 102);
+
+    ctx.fillStyle = '#ff88cc';
+    ctx.font = '11px monospace';
+    ctx.fillText(`📡 868.3MHz Burst: ${earworm.glowworm_burst?.signal_detected ? 'DETECTED' : 'LISTEN'}`, 18, 122);
+
+    this.bubbleTexture.needsUpdate = true;
   }
 
   setVisibility({ tdoa, beamforming, multipath }) {
@@ -383,6 +551,45 @@ export class EarwormSceneLayer {
         }
       }
     }
+
+    const gw = earworm.glowworm_burst;
+    if (this.glowWormBeacon && this.glowWormWave && gw) {
+      const [gx, gy, gz] = gw.emitter_3d_xyz || [-3.55, 1.35, -1.75];
+      this.glowWormBeacon.position.set(gx, gy, gz);
+      this.glowWormBeacon.rotation.y = elapsed * 2.2;
+      this.glowWormBeacon.material.color.setHex(gw.signal_detected ? 0xffaa00 : 0x336688);
+      this.glowWormWave.position.set(gx, gy, gz);
+      this.glowWormWave.visible = Boolean(gw.signal_detected);
+      if (gw.signal_detected) {
+        const phase = (elapsed * 1.4) % 1;
+        const scale = 1.0 + phase * 8.5;
+        this.glowWormWave.scale.set(scale, scale, 1);
+        this.glowWormWave.material.opacity = Math.max(0.05, 0.8 * (1 - phase));
+      }
+    }
+
+    // Update 3D Earworm Head Halos + Floating Thought Bubble beside Target
+    const headY = Math.max(1.55, ty + 0.38);
+    if (this.earwormHeadRings) {
+      this.earwormHeadRings.forEach((ring, idx) => {
+        ring.position.set(tx, headY + 0.04 * idx + 0.03 * Math.sin(elapsed * 5 + idx), tz);
+        const pulse = 1 + 0.22 * Math.sin(elapsed * 6.0 - idx * 1.4);
+        ring.scale.set(pulse, pulse, 1);
+      });
+    }
+    if (this.thoughtTrailDots && this.thoughtTrailDots.length === 3) {
+      this.thoughtTrailDots[0].position.set(tx + 0.18, headY + 0.14, tz);
+      this.thoughtTrailDots[1].position.set(tx + 0.32, headY + 0.28, tz);
+      this.thoughtTrailDots[2].position.set(tx + 0.48, headY + 0.44, tz);
+    }
+    if (this.thoughtBubbleSprite) {
+      const bob = 0.04 * Math.sin(elapsed * 3.2);
+      this.thoughtBubbleSprite.position.set(tx + 0.88, headY + 0.72 + bob, tz);
+      if (elapsed - (this._lastBubbleUpdate || 0) > 0.15) {
+        this._lastBubbleUpdate = elapsed;
+        this._updateThoughtBubbleCanvas(earworm, elapsed);
+      }
+    }
   }
 
   dispose() {
@@ -428,6 +635,7 @@ export class EarwormHudDock {
           <span>URI:</span>
           <input id="ew-pluto-uri" value="ip:192.168.2.1" style="flex:1;background:#040810;color:#00ffcc;border:1px solid #224466;padding:2px 4px;font-size:10px;" />
           <select id="ew-pluto-freq" style="background:#040810;color:#00ffcc;border:1px solid #224466;padding:2px;font-size:10px;">
+            <option value="868.3">868.3 MHz (Glow-worm)</option>
             <option value="2412">2412 MHz (Ch1)</option>
             <option value="2437" selected>2437 MHz (Ch6)</option>
             <option value="2462">2462 MHz (Ch11)</option>
@@ -462,6 +670,14 @@ export class EarwormHudDock {
       <canvas id="ew-tr-canvas" width="336" height="162" style="width:100%;border:1px solid #1a3048;border-radius:4px;margin-bottom:6px;"></canvas>
       <canvas id="ew-polar-canvas" width="336" height="118" style="width:100%;border:1px solid #1a3048;border-radius:4px;margin-bottom:6px;"></canvas>
 
+      <div style="border-top:1px solid #16304a;padding-top:4px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-bottom:3px;">
+          <strong style="color:#ffaa00;">STEP 4: URH + PLUTO 868.3 MHz BURST</strong>
+          <span>Trig: <input id="ew-gw-thresh" type="range" min="-45" max="-10" step="1" value="-30" style="width:70px;vertical-align:middle;" /> <span id="ew-gw-val">-30dB</span></span>
+        </div>
+        <canvas id="ew-gw-canvas" width="336" height="96" style="width:100%;border:1px solid #1a3048;border-radius:4px;"></canvas>
+      </div>
+
       <div style="border-top:1px solid #16304a;padding-top:5px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <strong style="color:#ffaa00;font-size:10px;">OLLAMA SIGNALINTELLIGENCE ADVISOR</strong>
@@ -469,11 +685,22 @@ export class EarwormHudDock {
         </div>
         <div id="ew-ollama-out" style="background:#050811;border:1px solid #1a2c42;padding:5px;border-radius:4px;font-size:10px;color:#cde4ff;white-space:pre-wrap;max-height:110px;overflow-y:auto;">Click "Ask SignalIntelligence" to query nightsweep-signalintelligence:latest for PlutoSDR & 3D Time-Reversal guidance.</div>
       </div>
+
+      <details style="margin-top:6px;border-top:1px solid #16304a;padding-top:5px;font-size:9.5px;color:#99c2e8;">
+        <summary style="cursor:pointer;color:#00ffcc;font-weight:bold;">📋 Real Equipment Setup Guide (PlutoSDR + ESP32 + URH)</summary>
+        <div style="margin-top:4px;line-height:1.45;background:#040811;padding:5px;border-radius:4px;border:1px solid #152940;">
+          <div><strong>1. ADALM-Pluto SDR (libiio/pyadi-iio):</strong> Connect USB/IP (<code>ip:192.168.2.1</code>) with 30dB inline attenuator or 868MHz/2.4GHz antennas; verify <code>iio_info -u ip:192.168.2.1</code>.</div>
+          <div><strong>2. 3D Room Anchors (8m×6m×3m):</strong> Place TX2 at <code>[0, 2.5, -2.8]m</code> (North) and RX2 at <code>[0, 2.5, +2.8]m</code> (South); ESP32-S3 CSI nodes stream UDP <code>:5005</code>.</div>
+          <div><strong>3. Time-Reversal Mirror (2437 MHz):</strong> Click <em>FULL REAL (PlutoSDR)</em> or run <code>python3 scripts/pluto_earworm_time_reversal.py --mode real --block 2 4 --ask-ollama</code>.</div>
+          <div><strong>4. URH 868.3 MHz Burst:</strong> Select <code>868.3 MHz</code> (2.0 MSPS, 10k buffer, 20 dB manual gain, trigger &gt; -30 dB) to capture &amp; demodulate 2-FSK/OOK bursts.</div>
+        </div>
+      </details>
     `;
 
     this.container.appendChild(this.el);
     this.trCanvas = this.el.querySelector('#ew-tr-canvas');
     this.polarCanvas = this.el.querySelector('#ew-polar-canvas');
+    this.gwCanvas = this.el.querySelector('#ew-gw-canvas');
     this._bindEvents();
     this._renderMaskButtons();
   }
@@ -535,6 +762,12 @@ export class EarwormHudDock {
       await this.service?.runTimeReversal(this.service.blockedPaths, val);
     });
 
+    q('#ew-gw-thresh')?.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      q('#ew-gw-val').textContent = `${val}dB`;
+      if (this.service) this.service.glowWormThresholdDb = val;
+    });
+
     q('#ew-ask-ollama')?.addEventListener('click', () => this.askSignalIntelligence());
   }
 
@@ -581,5 +814,6 @@ export class EarwormHudDock {
 
     drawPolarBeamformingCanvas(this.polarCanvas, bf);
     if (tr) drawTimeReversalAuditCanvas(this.trCanvas, tr);
+    if (earworm.glowworm_burst) drawGlowWormBurstCanvas(this.gwCanvas, earworm.glowworm_burst);
   }
 }

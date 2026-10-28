@@ -15244,8 +15244,9 @@ async fn main() {
             get(config_get_dedup_factor).post(config_set_dedup_factor),
         )
         .route("/api/v1/config/ground-truth", post(config_set_ground_truth))
-        // Static UI files
+        // Static UI files (served at both /ui/* and root fallback /* so /viz.html and /ui/viz.html both work)
         .nest_service("/ui", ServeDir::new(&ui_path))
+        .fallback_service(ServeDir::new(&ui_path))
         // ADR-102: make the edge registry handle (Option<Arc<EdgeRegistry>>)
         // available to the /api/v1/edge/registry handler. None when disabled.
         .layer(Extension(edge_registry.clone()))
