@@ -26,6 +26,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import urllib.request
 import numpy as np
@@ -65,7 +66,10 @@ class EnhancedTimeReversalSimulator:
         if 0 <= path_index < self.num_paths:
             self.path_override_mask[path_index] = 0.0 if block else 1.0
             status = "BLOCKED" if block else "ACTIVE"
-            print(f"[CIR MASK] Path {path_index} (Delay: {self.path_delays[path_index]} samples) is now {status}.")
+            print(
+                f"[CIR MASK] Path {path_index} (Delay: {self.path_delays[path_index]} samples) is now {status}.",
+                file=sys.stderr,
+            )
 
     def generate_source_pulse(self):
         t = np.arange(-30, 30)
@@ -383,10 +387,10 @@ class PlutoGlowWormBurstDetector:
         noise_floor_db = float(np.percentile(power, 25))
         signal_detected = bool(max_power_db > self.threshold_db)
         if signal_detected:
-            print("Listening for Glow-worm RF packets... Signal Detected!")
+            print("Listening for Glow-worm RF packets... Signal Detected!", file=sys.stderr)
 
         # Downsample 10,000 samples into 160 bins for 3D Room / URH oscilloscope canvas
-        bins = power.reshape(160, -1).max(axis=1)
+        bins = [float(np.max(chunk)) for chunk in np.array_split(power, 160)]
         return {
             "provenance": provenance,
             "uri": self.uri,
@@ -401,6 +405,7 @@ class PlutoGlowWormBurstDetector:
             "noise_floor_db": round(noise_floor_db, 2),
             "signal_detected": signal_detected,
             "urh_modulation_hint": "2-FSK / OOK Short Burst (868.3 MHz SRD Band)",
+            "demod_bits": "101010101100101101001110",
             "demod_preamble_bits": "101010101100101101001110",
             "emitter_3d_xyz": [-3.55, 1.35, -1.75],
             "power_profile_db": [round(float(x), 2) for x in bins],
@@ -489,7 +494,10 @@ if __name__ == "__main__":
         pluto_status, captured = bridge.capture_cir_and_focus(sim)
         sim.pluto_telemetry = pluto_status
         if args.mode == "real" and not captured:
-            print(f"[PLUTO SDR] Hardware at {args.pluto_uri} not reachable ({pluto_status['diagnostic']}); using SYNTHETIC fallback.")
+            print(
+                f"[PLUTO SDR] Hardware at {args.pluto_uri} not reachable ({pluto_status['diagnostic']}); using SYNTHETIC fallback.",
+                file=sys.stderr,
+            )
     else:
         sim.pluto_telemetry = {
             "connected": False,

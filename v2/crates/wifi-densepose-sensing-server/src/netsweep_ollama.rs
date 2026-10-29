@@ -235,12 +235,15 @@ fn compute_time_reversal_telemetry(blocked_paths: &[usize], noise_amplitude: f64
     if sigma > 0.0 {
         // Deterministic Box-Muller pseudo-Gaussian noise seeded by sample index + tick
         for (idx, val) in focused_result.iter_mut().enumerate() {
-            let u1 = (((idx as u64 * 6364136223846793005_u64)
+            let u1 = (((idx as u64)
+                .wrapping_mul(6364136223846793005_u64)
                 .wrapping_add(tick.wrapping_mul(1442695040888963407_u64))
                 .wrapping_add(1))
                 % 100_000) as f64
                 / 100_000.0;
-            let u2 = (((idx as u64 * 2862933555777941757_u64).wrapping_add(3037000493_u64))
+            let u2 = (((idx as u64)
+                .wrapping_mul(2862933555777941757_u64)
+                .wrapping_add(3037000493_u64))
                 % 100_000) as f64
                 / 100_000.0;
             let z = (-2.0 * u1.max(1e-5).ln()).sqrt() * (std::f64::consts::TAU * u2).cos();
@@ -540,7 +543,52 @@ fn compute_earworm_telemetry(s: &AppStateInner) -> Value {
             "spatial_pan_xyz": target,
             "echo_taps_ms": echo_taps_ms
         },
-        "time_reversal": compute_time_reversal_telemetry(&[2, 4], 0.12, s.tick)
+        "time_reversal": compute_time_reversal_telemetry(&[2, 4], 0.12, s.tick),
+        "glowworm_burst": compute_glowworm_burst_telemetry(-30.0, 20.0)
+    })
+}
+
+/// Step 4 URH + PlutoSDR 868.3 MHz Glow-worm Short-Burst Detector telemetry.
+fn compute_glowworm_burst_telemetry(threshold_db: f64, gain_db: f64) -> Value {
+    let power_profile_db: Vec<f64> = (0..160)
+        .map(|i| {
+            let db = if (54..=78).contains(&i) {
+                let env = -((i as f64 - 66.0).powi(2)) / 36.0;
+                -52.0 + 38.0 * env.exp()
+            } else {
+                -54.0 + ((i as f64 * 0.7).sin() * 1.8)
+            };
+            round2(db)
+        })
+        .collect();
+    let max_power_db = power_profile_db
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    let signal_detected = max_power_db > threshold_db;
+
+    json!({
+        "provenance": "SYNTHETIC",
+        "rx_lo_hz": 868_300_000_u64,
+        "rx_lo_mhz": 868.3,
+        "sample_rate_hz": 2_000_000_u64,
+        "rx_rf_bandwidth_hz": 2_000_000_u64,
+        "rx_buffer_size": 10_000_u64,
+        "gain_control_mode_chan0": "manual",
+        "rx_hardwaregain_chan0": gain_db,
+        "threshold_db": threshold_db,
+        "max_power_db": round2(max_power_db),
+        "noise_floor_db": -54.0,
+        "signal_detected": signal_detected,
+        "status_message": if signal_detected {
+            "Signal Detected!"
+        } else {
+            "Listening for Glow-worm RF packets..."
+        },
+        "modulation_hint": "2-FSK / OOK Short Burst",
+        "demod_bits": "101010101100101101001110",
+        "emitter_3d_xyz": [-3.55, 1.35, -1.75],
+        "power_profile_db": power_profile_db
     })
 }
 
@@ -876,4 +924,73 @@ async fn ollama_chat(
             "reply": reply
         })),
     )
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_ollama_host_ssrf_guard() {
+        assert_eq!(
+            validate_ollama_host("http://127.0.0.1:11434/").unwrap(),
+            "http://127.0.0.1:11434"
+        );
+        assert_eq!(
+            validate_ollama_host("http://localhost:11434").unwrap(),
+            "http://localhost:11434"
+        );
+        assert_eq!(
+            validate_ollama_host("http://[::1]:11434").unwrap(),
+            "http://[::1]:11434"
+        );
+        assert!(validate_ollama_host("http://169.254.169.254/latest").is_err());
+        assert!(validate_ollama_host("https://evil.example.com:11434").is_err());
+        assert!(validate_ollama_host("ftp://127.0.0.1:11434").is_err());
+    }
+
+    #[test]
+    fn test_validate_pluto_uri_injection_guard() {
+        assert_eq!(validate_pluto_uri("ip:192.168.2.1").unwrap(), "ip:192.168.2.1");
+        assert_eq!(validate_pluto_uri("usb:1.5.5").unwrap(), "usb:1.5.5");
+        assert!(validate_pluto_uri("").is_err());
+        assert!(validate_pluto_uri("tcp:192.168.2.1").is_err());
+        assert!(validate_pluto_uri("ip:192.168.2.1;whoami").is_err());
+    }
+
+    #[test]
+    fn test_compute_time_reversal_telemetry_cir_mask_and_noise() {
+        let clean = compute_time_reversal_telemetry(&[], 0.0, 1);
+        assert_eq!(clean["provenance"], "SYNTHETIC");
+        assert_eq!(clean["num_paths"], 6);
+        assert_eq!(clean["original_pulse"].as_array().unwrap().len(), 60);
+        assert_eq!(clean["degraded"], false);
+        assert!(clean["peak_to_rms_ratio"].as_f64().unwrap() > 2.0);
+
+        let masked = compute_time_reversal_telemetry(&[2, 4], 0.12, 1);
+        assert_eq!(masked["blocked_paths"], json!([2, 4]));
+        assert_eq!(masked["path_override_mask"][2], 0.0);
+        assert_eq!(masked["path_override_mask"][4], 0.0);
+        assert_eq!(masked["path_override_mask"][0], 1.0);
+        assert_eq!(masked["degraded"], true);
+    }
+
+    #[test]
+    fn test_compute_glowworm_burst_telemetry_threshold_gating() {
+        let detected = compute_glowworm_burst_telemetry(-30.0, 20.0);
+        assert_eq!(detected["rx_lo_hz"], 868_300_000_u64);
+        assert_eq!(detected["sample_rate_hz"], 2_000_000_u64);
+        assert_eq!(detected["rx_buffer_size"], 10_000_u64);
+        assert_eq!(detected["signal_detected"], true);
+        assert_eq!(detected["status_message"], "Signal Detected!");
+        assert_eq!(detected["demod_bits"], "101010101100101101001110");
+
+        let suppressed = compute_glowworm_burst_telemetry(-5.0, 20.0);
+        assert_eq!(suppressed["signal_detected"], false);
+        assert_eq!(
+            suppressed["status_message"],
+            "Listening for Glow-worm RF packets..."
+        );
+    }
 }
